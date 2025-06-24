@@ -61,7 +61,7 @@ function showRandomQuote() {
   sessionStorage.setItem("lastViewedQuote", randomIndex);
 }
 
-// Filter quotes
+// Filter logic
 function getFilteredQuotes() {
   const filter = document.getElementById("categoryFilter").value;
   if (filter === "all") return quotes;
@@ -74,7 +74,6 @@ function filterQuotes() {
   displayQuotes(getFilteredQuotes());
 }
 
-// Populate category filter
 function populateCategories() {
   const categories = [...new Set(quotes.map(q => q.category))];
   const select = document.getElementById("categoryFilter");
@@ -89,7 +88,7 @@ function populateCategories() {
   if (savedFilter) select.value = savedFilter;
 }
 
-// Add a new quote
+// Add new quote
 function addQuote() {
   const textInput = document.getElementById("newQuoteText");
   const categoryInput = document.getElementById("newQuoteCategory");
@@ -102,7 +101,7 @@ function addQuote() {
     saveQuotes();
     populateCategories();
     filterQuotes();
-    postQuoteToServer(newQuote); // Send to server
+    postQuoteToServer(newQuote);
     textInput.value = "";
     categoryInput.value = "";
   } else {
@@ -144,7 +143,7 @@ function importFromJsonFile(event) {
   reader.readAsText(event.target.files[0]);
 }
 
-// ✅ Post a quote to the mock API
+// ✅ POST a quote to mock server
 async function postQuoteToServer(quote) {
   try {
     await fetch("https://jsonplaceholder.typicode.com/posts", {
@@ -158,38 +157,43 @@ async function postQuoteToServer(quote) {
   }
 }
 
-// ✅ Fetch from mock API and merge
-async function syncQuotes() {
+// ✅ Required: fetchQuotesFromServer — used inside sync
+async function fetchQuotesFromServer() {
   try {
     const response = await fetch("https://jsonplaceholder.typicode.com/posts");
     const data = await response.json();
-    const serverQuotes = data.slice(0, 5).map(post => ({
+    return data.slice(0, 5).map(post => ({
       text: post.title,
       category: "Server"
     }));
-
-    const existingTexts = new Set(quotes.map(q => q.text));
-    let newAdded = 0;
-
-    serverQuotes.forEach(q => {
-      if (!existingTexts.has(q.text)) {
-        quotes.push(q);
-        newAdded++;
-      }
-    });
-
-    if (newAdded > 0) {
-      saveQuotes();
-      populateCategories();
-      filterQuotes();
-      notifyUser(`${newAdded} new quotes synced from server.`);
-    }
-  } catch (error) {
-    console.warn("Server sync failed.");
+  } catch (err) {
+    console.warn("Fetch from server failed.");
+    return [];
   }
 }
 
-// ✅ Notify UI
+// ✅ Sync logic — called on load & periodically
+async function syncQuotes() {
+  const serverQuotes = await fetchQuotesFromServer();
+  const existingTexts = new Set(quotes.map(q => q.text));
+  let newAdded = 0;
+
+  serverQuotes.forEach(q => {
+    if (!existingTexts.has(q.text)) {
+      quotes.push(q);
+      newAdded++;
+    }
+  });
+
+  if (newAdded > 0) {
+    saveQuotes();
+    populateCategories();
+    filterQuotes();
+    notifyUser(`${newAdded} new quotes synced from server.`);
+  }
+}
+
+// ✅ Simple UI notice
 function notifyUser(message) {
   const notice = document.createElement("div");
   notice.textContent = message;
@@ -201,7 +205,7 @@ function notifyUser(message) {
   setTimeout(() => notice.remove(), 4000);
 }
 
-// Initialize
+// Init
 document.addEventListener("DOMContentLoaded", () => {
   loadQuotes();
   populateCategories();
@@ -212,6 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("exportBtn").addEventListener("click", exportToJsonFile);
   document.getElementById("importFile").addEventListener("change", importFromJsonFile);
 
-  syncQuotes(); // Initial sync
-  setInterval(syncQuotes, 30000); // Every 30 seconds
+  // ✅ Start syncing
+  syncQuotes(); // On load
+  setInterval(syncQuotes, 30000); // Every 30s
 });
